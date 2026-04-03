@@ -1,5 +1,6 @@
 // src/App.tsx
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from './lib/supabaseClient'
 import './App.css'
 
 // Define what a Todo looks like
@@ -15,55 +16,91 @@ function App() {
   // State for the input field — TypeScript infers this as string
   const [inputValue, setInputValue] = useState('')
   
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()  // Stop the browser from refreshing the page
+  const [loading, setLoading] = useState(true)
+  
+  useEffect(() => {
+    fetchTodos()
+  }, [])
+  
+  async function fetchTodos() {
+  setLoading(true)
 
-    // Don't add empty todos
-    if (!inputValue.trim()) return
+  const { data, error } = await supabase
+    .from('todos')
+    .select('*')
+    .order('created_at', { ascending: true })
 
-    // Create a new todo object that matches our Todo interface
-    const newTodo: Todo = {
-      id: Date.now(),       // Unique ID using current timestamp
-      text: inputValue.trim()  // Remove extra whitespace
-    }
+  if (error) {
+    console.error('Error fetching todos:', error)
+  } else {
+    setTodos(data)
+  }
 
-    // Add the new todo to the existing array (spread operator creates a copy)
-    setTodos([...todos, newTodo])
+  setLoading(false)
+}
 
-    // Clear the input field
+  const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault()
+  if (!inputValue.trim()) return
+
+  const { data, error } = await supabase
+    .from('todos')
+    .insert([{ text: inputValue.trim() }])
+    .select()
+
+  if (error) {
+    console.error('Error adding todo:', error)
+  } else {
+    setTodos([...todos, data[0] as Todo])
     setInputValue('')
   }
+}
   
-  const deleteTodo = (id: number) => {
-    setTodos(todos.filter((todo) => todo.id !== id))
+  const deleteTodo = async (id: number) => {
+  const { error } = await supabase
+    .from('todos')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    console.error('Error deleting todo:', error)
+  } else {
+    setTodos(todos.filter(todo => todo.id !== id))
   }
+}
 
   return (
-     <div className="app">
-      <h1>React Todo App</h1>
+  <div className="app">
+    <h1>React Todo App</h1>
 
-      <form className="todo-form" onSubmit={handleSubmit}>
-        <input
-          type="text"
-          placeholder="Add a new todo..."
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-        />
-        <button type="submit">Add</button>
-      </form>
+    <form className="todo-form" onSubmit={handleSubmit}>
+      <input
+        type="text"
+        placeholder="Add a new todo..."
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+      />
+      <button type="submit">Add</button>
+    </form>
 
+    {loading ? (
+      <p>Loading todos...</p>
+    ) : (
       <ul className="todo-list">
         {todos.map((todo) => (
           <li key={todo.id} className="todo-item">
             <span>{todo.text}</span>
-            <button className="delete-btn" onClick={() => deleteTodo(todo.id)}>
+            <button
+              className="delete-btn"
+              onClick={() => deleteTodo(todo.id)}
+            >
               Delete
             </button>
           </li>
         ))}
       </ul>
-    </div>
-  )
+    )}
+  </div>
+)
 }
-
 export default App
